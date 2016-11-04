@@ -27,10 +27,31 @@ sphinx:
   trigger_phrase: "alexa"
 
 platform:
-  # Name of your device, e.g. raspberrypi, orangepi, desktop
+  # Name of your platform, e.g. raspberrypi, orangepi, desktop
   device: "raspberrypi"
 
 platforms:
+  # common config for all platforms (if they support the options)
+  # can be overriden in the the respective platform sections
+  common:
+    # whether you want to hear Alexa's "yes" after you press a button
+    # "true" or "false"
+    should_confirm_trigger: false
+
+    long_press:
+      # system command to run after pressing the button for _duration_ number of seconds
+      # empty to disable
+      command: ""
+
+      # duration in seconds
+      duration: 10
+
+      # CURRENTLY DISABLED
+      # optional audio file to play before executing the command
+      # you might wanna use full path to make sure AlexaPi finds it
+      # you can use {resources_path} for the path to the AlexaPi "resources" directory
+      audio_file: ""
+
   raspberrypi:
     # GPIO Pin with button connected
     button: 18
@@ -39,31 +60,6 @@ platforms:
     # GPIO Pin for the recording light
     rec_light: 25
 
-    # whether you want to hear Alexa's "yes" after you press a button
-    # "true" or "false"
-    should_confirm_trigger: false
-
-    long_press:
-      # system command to run after pressing the button for _duration_ number of seconds
-      # empty to disable
-      command: ""
-
-      # duration in seconds
-      duration: 10
-
-      # CURRENTLY DISABLED
-      # optional audio file to play before executing the command
-      # you might wanna use full path to make sure AlexaPi finds it
-      # you can use {resources_path} for the path to the AlexaPi "resources" directory
-      audio_file: ""
-
-  desktop:
-    # whether you want to hear Alexa's "yes" after you press a button
-    # "true" or "false"
-    should_confirm_trigger: true
-
-    min_seconds_to_record: 3
-    
   orangepi:
     # GPIO Pin with button connected
     button: 20
@@ -72,21 +68,11 @@ platforms:
     # GPIO Pin for the recording light
     rec_light: 8
 
-    # whether you want to hear Alexa's "yes" after you press a button
-    # "true" or "false"
-    should_confirm_trigger: false
+  desktop:
+    should_confirm_trigger: true
 
-    long_press:
-      # system command to run after pressing the button for _duration_ number of seconds
-      # empty to disable
-      command: ""
+    min_seconds_to_record: 3
 
-      # duration in seconds
-      duration: 10
-
-      # CURRENTLY DISABLED
-      # optional audio file to play before executing the command
-      # you might wanna use full path to make sure AlexaPi finds it
-      # you can use {resources_path} for the path to the AlexaPi "resources" directory
-      audio_file: ""
-
+  dummy:
+    # whether to print messages when methods are called
+    verbose: false
