@@ -5,7 +5,7 @@ This is based on [Home Assistant's](https://github.com/home-assistant/home-assis
 ## Code standards
 
 We stick to [PEP8](https://www.python.org/dev/peps/pep-0008/) with the one exception being the indentation.
-We use **tabs for indentation** and **spaces for alignment**.
+We use **tabs for indentation**.
 
 Please stick to this to keep the code clean, readable and consistent.
 
@@ -65,31 +65,30 @@ Please stick to this to keep the code clean, readable and consistent.
 
 ## For core developers
 
-Let's stick to the rule that no one (not even core developers) pushes directly to the repo. Every time one wants to make a change - even a silly one, it has to go through the Pull Request mechanism and at least one other core developer (one with push access to the repo) has to do a code review and agree with it before pulling it into `master`.
+Let's stick to the rule that no one (not even core developers) pushes directly to the repo. Every time one wants to make a change - even a silly one, it has to go through the Pull Request mechanism and at least one other core developer (one with push access to the repo) has to do a code review and agree with it before pulling it into `dev` or `master`.
+
+### 14-day PR review window rule
+
+When there is an open PR with no blocking objections for at least 14 days, it can be merged without explicit approval of other team members.
+
+It's perfectly understandable that people don't have time to devote to AlexaPi to review stuff and if people with write access merge something even without a proper review, it will bring more good than harm to the project (keeps the development running, makes the project better as only people who have proved themselves have write access).
+
+An attempt to contact relevant team members has to be made (team mention for example). This rule is to account for people being busy, unavailable or unwilling rather than trying to sneak PRs through.
 
 ## If you want to check out someone else's branch (for example a Pull Request)
 
 **Always make sure there is no malicious code there before running it!**
 
-If you want a fresh directory to do that:
-```
-git clone -b NEW_FEATURE_BRANCH https://github.com/PERSONS_GIT_USERNAME/PERSONS_REPO_NAME.git AlexaPi
-```
+- If you want to check out a Pull Request from your existing directory:
 
-If you want to add it to your existing directory:
-```
-# Suppose you have done this already:
-git clone https://github.com/alexa-pi/AlexaPi
-cd AlexaPi
+    ```
+    git fetch upstream pull/PULL_ID/head:PULL_ID
+    git checkout PULL_ID
+    ```
+    Where `PULL_ID` is the actual Pull Request number.
 
-# Then do this
-git remote add PERSONS_GIT_USERNAME https://github.com/PERSONS_GIT_USERNAME/PERSONS_REPO_NAME.git
-git fetch PERSONS_GIT_USERNAME
-git checkout PERSONS_GIT_USERNAME/NEW_FEATURE_BRANCH
-
-# If the person updates the PR, you can pull new commits just by running:
-# (while you're at the correct branch)
-git pull PERSONS_GIT_USERNAME NEW_FEATURE_BRANCH
-```
-
-Where `PERSONS_REPO_NAME` is usually `AlexaPi`, but can also be `AlexaPi-1`, `AlexaPiNG`, or anything else.
+- If you want a fresh directory to do that:
+    ```
+    git clone -b NEW_FEATURE_BRANCH https://github.com/PERSONS_GIT_USERNAME/PERSONS_REPO_NAME.git AlexaPi
+    ```
+    Where `PERSONS_REPO_NAME` is usually `AlexaPi`, but can also be `AlexaPi-1`, `AlexaPiNG`, or anything else.
