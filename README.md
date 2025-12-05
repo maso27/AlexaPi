@@ -1,4 +1,6 @@
-# AlexaPi (the new & awesome version) [![Gitter chat](https://badges.gitter.im/alexa-pi/Lobby.png)](https://gitter.im/alexa-pi/Lobby)
+# AlexaPi is no longer supported by the Amazon API, and is now deprecated.
+
+# AlexaPi ~(the new & awesome version) [![Gitter chat](https://badges.gitter.im/alexa-pi/Lobby.png)](https://gitter.im/alexa-pi/Lobby)~
 
 This is a client for Amazon's Alexa service. It is intended and tested to run on a wide range of platforms, such as Raspberry Pi, Orange Pi, CHIP and ordinary Linux desktops.
 
