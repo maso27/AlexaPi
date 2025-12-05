@@ -3,14 +3,17 @@ import importlib
 triggers = {}
 
 
-def init(config, trigger_callback):
+def init(config, trigger_callback, capture):
 
 	for name in config['triggers']:
 		if config['triggers'][name]['enabled']:
 			im = importlib.import_module('alexapi.triggers.' + name + 'trigger', package=None)
 			cl = getattr(im, name.capitalize() + 'Trigger')
 
-			triggers[name] = cl(config, trigger_callback)
+			if cl.type == TYPES.VOICE:
+				triggers[name] = cl(config, trigger_callback, capture)
+			else:
+				triggers[name] = cl(config, trigger_callback)
 
 
 def setup():
@@ -35,12 +38,19 @@ def disable(type_filter=None):
 			trigger.disable()
 
 
-class TYPES(object):
+def cleanup(type_filter=None):
+	for name in triggers:
+		trigger = triggers[name]
+		if (not type_filter) or (trigger.type == type_filter):
+			trigger.cleanup()
+
+
+class TYPES:
 	OTHER = 0
 	VOICE = 1
 
 
-class EVENT_TYPES(object): # pylint: disable=invalid-name
+class EVENT_TYPES: # pylint: disable=invalid-name
 	ONESHOT_VAD = 1
 	CONTINUOUS = 2
 	CONTINUOUS_VAD = 3

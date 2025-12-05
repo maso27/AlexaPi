@@ -5,6 +5,66 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.8] - 2019-08-20
+
+### Changed
+- updated dependencies
+
+### Fixed
+- Debian: `vlc-nox` dependency - replaced by `vlc-bin` & `vlc-plugin-base` - it was only a transitional dummy package in Stretch and is no longer available in Buster
+
+## [1.7] - 2018-12-22
+
+### Added
+- Support for snowboy - the awesome trigger word detector
+- Debug option to `auth_web.py`.
+
+### Changed
+- Python 3 is default.
+- Uses `pip` version from the repo on Debian systems instead of the dirty uninstall & install via `easy_install`.
+
+### Removed
+- Support for Python < 3.5
+- Support for Debian/Raspbian older than Stretch - Jessie is not supported anymore!
+
+### Fixed
+- Weird bugs with dependencies versions, as we now use locked deps.
+- Broken Raspbian installs due to some Python version mishap.
+
+## [1.6] - 2017-10-08
+
+### Added
+- Windows support
+
+### Changed
+- Switched from pyalsaaudio (ALSA) to pyaudio (PortAudio)
+    - You might have to change the `input_device` in your config, but this name will stay forever (we are not planning any change).
+    - Also removed config option to allow unlisted devices as this is not possible from now on (you have to select a device from the list).
+
+## [1.5.1] - 2017-10-08
+Small bugfix release.
+
+### Fixed
+- Removed a few potentially confusing messages for users.
+- Fix bad characters in stored filenames which prevented them from playing and might have resulted in a crash. Fixes crashes when asking for weather.
+
+## [1.5] - 2017-03-10
+Please run the installation script again to install / upgrade all the dependencies. 
+There are no config changes this time. 
+Run the `auth_web.py` again after the install (when keeping a config) for your device to appear separately in the Alexa app. 
+
+### Changed
+- On Debian-based systems, the `python-pip` package gets uninstalled and `pip` is installed via `easy_install` instead to get the latest version.
+- Recorded audio is now streamed to AVS instead of recording the whole thing and then sending it at once.
+    - Brings huge speed improvement (response latency).
+    - This means that when your recording LED (or whatever your device equivalent) is on, data gets sent to Amazon already.
+    - Used code from @respeaker (thank you!).
+- Changed the device ID in auth_web to use a unique ID for the HW from UUID.getnode() to allow multiple devices on one account, this ID is a hashed version of one of the devices MAC addresses.
+- Changed hello.mp3 to 24Khz Mono to match the other files
+
+### Fixed
+- Updated old versions of requirements in `requirements.txt`. Also fixes `ImportError: No module named cheroot.server`.
+
 ## [1.4] - 2017-03-01
 Please update your config according to the [Configuration changes] section on the wiki or better, do a new clean installation with a fresh config.
 
@@ -113,7 +173,12 @@ This is mainly a test of doing bugfix releases.
 @sammachin created the project in January 2016 and made significant changes that lead to this version.
 
 
-[Unreleased]: https://github.com/alexa-pi/AlexaPi/compare/v1.4...HEAD
+[Unreleased]: https://github.com/alexa-pi/AlexaPi/compare/v1.8...HEAD
+[1.8]: https://github.com/alexa-pi/AlexaPi/compare/v1.7...v1.8
+[1.7]: https://github.com/alexa-pi/AlexaPi/compare/v1.6...v1.7
+[1.6]: https://github.com/alexa-pi/AlexaPi/compare/v1.5.1...v1.6
+[1.5.1]: https://github.com/alexa-pi/AlexaPi/compare/v1.5...v1.5.1
+[1.5]: https://github.com/alexa-pi/AlexaPi/compare/v1.4...v1.5
 [1.4]: https://github.com/alexa-pi/AlexaPi/compare/v1.3...v1.4
 [1.3.1]: https://github.com/alexa-pi/AlexaPi/compare/v1.3...v1.3.1
 [1.3]: https://github.com/alexa-pi/AlexaPi/compare/v1.2...v1.3

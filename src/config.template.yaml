@@ -1,5 +1,3 @@
-# Rename this file to config.yaml and fill in the fields
-
 # See https://github.com/alexa-pi/AlexaPi/wiki/Audio-setup-&-debugging
 # to get a better idea of how to set things in here
 
@@ -9,11 +7,9 @@
 logging: INFO
 
 sound:
-  # Name of your ALSA microphone/soundcard in arecord -L
-  input_device: "default"
-  # This is here if none of the listed devices works for you and you need to use a value like "plughw:1"
-  # This is an override that is normally not needed and is a last resort.
-  allow_unlisted_input_device: false
+  # Name of your microphone device in PortAudio
+  # leave empty for default
+  input_device: ""
 
   playback_handler: "vlc"
 
@@ -79,6 +75,21 @@ triggers:
 
     phrase: "alexa"
     threshold: 1e-10
+
+  snowboy:
+    enabled: false
+    voice_confirm: true
+
+    # Use your own model or a file from the default snowboy distribution:
+    #
+    # {distribution}/alexa.umdl
+    # {distribution}/snowboy.umdl
+    # {distribution}/alexa/alexa_02092017.umdl
+    # {distribution}/alexa/alexa-avs-sample-app/alexa.umdl
+
+    model: "{distribution}/alexa/alexa_02092017.umdl"
+    sensitivity: 0.5
+
 
 # Commands to run before and after an interaction begins. Leave empty to disable.
 event_commands:

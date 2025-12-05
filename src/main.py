@@ -13,6 +13,7 @@ import json
 import optparse
 import email
 import subprocess
+import hashlib
 
 import yaml
 import requests
@@ -108,7 +109,7 @@ cl = getattr(im, config['platform']['device'].capitalize() + 'Platform')
 platform = cl(config)
 
 
-class Player(object):
+class Player:
 
 	config = None
 	platform = None
@@ -137,12 +138,12 @@ class Player(object):
 
 			url = stream['streamUrl']
 			if stream['streamUrl'].startswith("cid:"):
-				url = "file://" + tmp_path + stream['streamUrl'].lstrip("cid:") + ".mp3"
+				url = "file://" + tmp_path + hashlib.md5(stream['streamUrl'].replace("cid:", "", 1).encode()).hexdigest() + ".mp3"
 
 			if (url.find('radiotime.com') != -1):
 				url = self.tunein_playlist(url)
 
-			self.pHandler.queued_play(mrl_fix(url), stream['offsetInMilliseconds'], audio_type='media', stream_id=streamId)
+			self.pHandler.queued_play(url, stream['offsetInMilliseconds'], audio_type='media', stream_id=streamId)
 
 	def play_speech(self, mrl):
 		self.stop()
@@ -209,15 +210,6 @@ MAX_VOLUME = 100
 MIN_VOLUME = 30
 
 
-def mrl_fix(url):
-	if ('#' in url) and url.startswith('file://'):
-		new_url = url.replace('#', '.hashMark.')
-		os.rename(url.replace('file://', ''), new_url.replace('file://', ''))
-		url = new_url
-
-	return url
-
-
 def internet_on():
 	try:
 		requests.get('https://api.amazon.com/auth/o2/token')
@@ -228,7 +220,7 @@ def internet_on():
 		return False
 
 
-class Token(object):
+class Token:
 
 	_token = ''
 	_timestamp = None
@@ -274,30 +266,36 @@ class Token(object):
 
 			logger.info("AVS token: Obtained successfully")
 		except requests.exceptions.RequestException as exp:
-			logger.critical("AVS token: Failed to obtain a token: " + str(exp))
+			logger.critical("AVS token: Failed to obtain a token: %s", str(exp))
 
 
-def alexa_speech_recognizer():
-	# https://developer.amazon.com/public/solutions/alexa/alexa-voice-service/rest/speechrecognizer-requests
-	logger.debug("Sending Speech Request...")
+# from https://github.com/respeaker/Alexa/blob/master/alexa.py
+def alexa_speech_recognizer_generate_data(audio, boundary):
+	"""
+	Generate a iterator for chunked transfer-encoding request of Alexa Voice Service
+	Args:
+		audio: raw 16 bit LSB audio data
+		boundary: boundary of multipart content
+	Returns:
+	"""
+	logger.debug('Start sending speech to Alexa Voice Service')
+	chunk = '--%s\r\n' % boundary
+	chunk += (
+		'Content-Disposition: form-data; name="request"\r\n'
+		'Content-Type: application/json; charset=UTF-8\r\n\r\n'
+	)
 
-	platform.indicate_processing()
-
-	url = 'https://access-alexa-na.amazon.com/v1/avs/speechrecognizer/recognize'
-	headers = {'Authorization': 'Bearer %s' % token}
 	data = {
 		"messageHeader": {
-			"deviceContext": [
-				{
-					"name": "playbackState",
-					"namespace": "AudioPlayer",
-					"payload": {
-						"streamId": "",
-						"offsetInMilliseconds": "0",
-						"playerActivity": "IDLE"
-					}
+			"deviceContext": [{
+				"name": "playbackState",
+				"namespace": "AudioPlayer",
+				"payload": {
+					"streamId": "",
+					"offsetInMilliseconds": "0",
+					"playerActivity": "IDLE"
 				}
-			]
+			}]
 		},
 		"messageBody": {
 			"profile": "alexa-close-talk",
@@ -306,12 +304,38 @@ def alexa_speech_recognizer():
 		}
 	}
 
-	with open(tmp_path + 'recording.wav', 'rb') as inf:
-		files = [
-			('file', ('request', json.dumps(data), 'application/json; charset=UTF-8')),
-			('file', ('audio', inf, 'audio/L16; rate=16000; channels=1'))
-		]
-		resp = requests.post(url, headers=headers, files=files)
+	yield bytes(chunk + json.dumps(data) + '\r\n', 'utf8')
+
+	chunk = '--%s\r\n' % boundary
+	chunk += (
+		'Content-Disposition: form-data; name="audio"\r\n'
+		'Content-Type: audio/L16; rate=16000; channels=1\r\n\r\n'
+	)
+
+	yield bytes(chunk, 'utf8')
+
+	for audio_chunk in audio:
+		yield audio_chunk
+
+	yield bytes('--%s--\r\n' % boundary, 'utf8')
+	logger.debug('Finished sending speech to Alexa Voice Service')
+
+	platform.indicate_processing()
+
+
+def alexa_speech_recognizer(audio_stream):
+	# https://developer.amazon.com/public/solutions/alexa/alexa-voice-service/rest/speechrecognizer-requests
+
+	url = 'https://access-alexa-na.amazon.com/v1/avs/speechrecognizer/recognize'
+	boundary = 'this-is-a-boundary'
+	headers = {
+		'Authorization': 'Bearer %s' % token,
+		'Content-Type': 'multipart/form-data; boundary=%s' % boundary,
+		'Transfer-Encoding': 'chunked',
+	}
+
+	data = alexa_speech_recognizer_generate_data(audio_stream, boundary)
+	resp = requests.post(url, headers=headers, data=data)
 
 	platform.indicate_processing(False)
 
@@ -392,86 +416,88 @@ def alexa_playback_progress_report_request(requestType, playerActivity, stream_i
 def process_response(response):
 	logger.debug("Processing Request Response...")
 
-	if response.status_code == 200:
-		try:
-			data = bytes("Content-Type: ", 'utf-8') + bytes(response.headers['content-type'], 'utf-8') + bytes('\r\n\r\n', 'utf-8') + response.content
-			msg = email.message_from_bytes(data) # pylint: disable=no-member
-		except TypeError:
-			data = "Content-Type: " + response.headers['content-type'] + '\r\n\r\n' + response.content
-			msg = email.message_from_string(data)
-
-		for payload in msg.get_payload():
-			if payload.get_content_type() == "application/json":
-				j = json.loads(payload.get_payload())
-				logger.debug("JSON String Returned: %s", json.dumps(j, indent=2))
-			elif payload.get_content_type() == "audio/mpeg":
-				filename = tmp_path + payload.get('Content-ID').strip("<>") + ".mp3"
-				with open(filename, 'wb') as f:
-					f.write(payload.get_payload(decode=True))
-			else:
-				logger.debug("NEW CONTENT TYPE RETURNED: %s", payload.get_content_type())
-
-		# Now process the response
-		if 'directives' in j['messageBody']:
-			if not j['messageBody']['directives']:
-				logger.debug("0 Directives received")
-
-			for directive in j['messageBody']['directives']:
-				if directive['namespace'] == 'SpeechSynthesizer':
-					if directive['name'] == 'speak':
-						player.play_speech(mrl_fix("file://" + tmp_path + directive['payload']['audioContent'].lstrip("cid:") + ".mp3"))
-
-				elif directive['namespace'] == 'SpeechRecognizer':
-					if directive['name'] == 'listen':
-						logger.debug("Further Input Expected, timeout in: %sms", directive['payload']['timeoutIntervalInMillis'])
-
-						player.play_speech(resources_path + 'beep.wav')
-						timeout = directive['payload']['timeoutIntervalInMillis'] / 116
-						capture.silence_listener(timeout)
-
-						# now process the response
-						alexa_speech_recognizer()
-
-				elif directive['namespace'] == 'AudioPlayer':
-					if directive['name'] == 'play':
-						player.play_playlist(directive['payload'])
-
-				elif directive['namespace'] == "Speaker":
-					# speaker control such as volume
-					if directive['name'] == 'SetVolume':
-						vol_token = directive['payload']['volume']
-						type_token = directive['payload']['adjustmentType']
-						if (type_token == 'relative'):
-							volume = player.get_volume() + int(vol_token)
-						else:
-							volume = int(vol_token)
-
-						if (volume > MAX_VOLUME):
-							volume = MAX_VOLUME
-						elif (volume < MIN_VOLUME):
-							volume = MIN_VOLUME
-
-						player.set_volume(volume)
-
-						logger.debug("new volume = %s", volume)
-
-		# Additional Audio Iten
-		elif 'audioItem' in j['messageBody']:
-			player.play_playlist(j['messageBody'])
-
+	if response.status_code == 204:
+		logger.debug("Request Response is null (This is OKAY!)")
 		return
 
-	elif response.status_code == 204:
-		logger.debug("Request Response is null (This is OKAY!)")
-	else:
+	if response.status_code != 200:
 		logger.info("(process_response Error) Status Code: %s", response.status_code)
 		response.connection.close()
-
 		platform.indicate_failure()
+		return
+
+	try:
+		data = bytes("Content-Type: ", 'utf-8') + bytes(response.headers['content-type'], 'utf-8') + bytes('\r\n\r\n', 'utf-8') + response.content
+		msg = email.message_from_bytes(data) # pylint: disable=no-member
+	except AttributeError:
+		data = "Content-Type: " + response.headers['content-type'] + '\r\n\r\n' + response.content
+		msg = email.message_from_string(data)
+
+	for payload in msg.get_payload():
+		if payload.get_content_type() == "application/json":
+			j = json.loads(payload.get_payload())
+			logger.debug("JSON String Returned: %s", json.dumps(j, indent=2))
+		elif payload.get_content_type() == "audio/mpeg":
+			filename = tmp_path + hashlib.md5(payload.get('Content-ID').strip("<>").encode()).hexdigest() + ".mp3"
+			with open(filename, 'wb') as f:
+				f.write(payload.get_payload(decode=True))
+		else:
+			logger.debug("NEW CONTENT TYPE RETURNED: %s", payload.get_content_type())
+
+	# Now process the response
+	if 'directives' in j['messageBody']:
+		if not j['messageBody']['directives']:
+			logger.debug("0 Directives received")
+
+		for directive in j['messageBody']['directives']:
+			if directive['namespace'] == 'SpeechSynthesizer':
+				if directive['name'] == 'speak':
+					player.play_speech("file://" + tmp_path + hashlib.md5(directive['payload']['audioContent'].replace("cid:", "", 1).encode()).hexdigest() + ".mp3")
+
+			elif directive['namespace'] == 'SpeechRecognizer':
+				if directive['name'] == 'listen':
+					logger.debug("Further Input Expected, timeout in: %sms", directive['payload']['timeoutIntervalInMillis'])
+
+					player.play_speech(resources_path + 'beep.wav')
+					timeout = directive['payload']['timeoutIntervalInMillis'] / 116
+					audio_stream = capture.silence_listener(timeout)
+
+					# now process the response
+					alexa_speech_recognizer(audio_stream)
+
+			elif directive['namespace'] == 'AudioPlayer':
+				if directive['name'] == 'play':
+					player.play_playlist(directive['payload'])
+
+			elif directive['namespace'] == "Speaker":
+				# speaker control such as volume
+				if directive['name'] == 'SetVolume':
+					vol_token = directive['payload']['volume']
+					type_token = directive['payload']['adjustmentType']
+					if (type_token == 'relative'):
+						volume = player.get_volume() + int(vol_token)
+					else:
+						volume = int(vol_token)
+
+					if (volume > MAX_VOLUME):
+						volume = MAX_VOLUME
+					elif (volume < MIN_VOLUME):
+						volume = MIN_VOLUME
+
+					player.set_volume(volume)
+
+					logger.debug("new volume = %s", volume)
+
+	# Additional Audio Iten
+	elif 'audioItem' in j['messageBody']:
+		player.play_playlist(j['messageBody'])
+
 
 trigger_thread = None
 def trigger_callback(trigger):
 	global trigger_thread
+
+	logger.info("Triggered: %s", trigger.name)
 
 	triggers.disable()
 
@@ -481,14 +507,9 @@ def trigger_callback(trigger):
 
 
 def trigger_process(trigger):
-	if event_commands['pre_interaction']:
-		subprocess.Popen(event_commands['pre_interaction'], shell=True, stdout=subprocess.PIPE)
 
 	if player.is_playing():
 		player.stop()
-
-	if trigger.voice_confirm:
-		player.play_speech(resources_path + 'alexayes.mp3')
 
 	# clean up the temp directory
 	if not debug:
@@ -500,12 +521,18 @@ def trigger_process(trigger):
 			except Exception as exp: # pylint: disable=broad-except
 				logger.warning(exp)
 
+	if event_commands['pre_interaction']:
+		subprocess.Popen(event_commands['pre_interaction'], shell=True, stdout=subprocess.PIPE)
+
 	force_record = None
 	if trigger.event_type in triggers.types_continuous:
 		force_record = (trigger.continuous_callback, trigger.event_type in triggers.types_vad)
 
-	capture.silence_listener(force_record=force_record)
-	alexa_speech_recognizer()
+	if trigger.voice_confirm:
+		player.play_speech(resources_path + 'alexayes.mp3')
+
+	audio_stream = capture.silence_listener(force_record=force_record)
+	alexa_speech_recognizer(audio_stream)
 
 	triggers.enable()
 
@@ -514,8 +541,11 @@ def trigger_process(trigger):
 
 
 def cleanup(signal, frame):   # pylint: disable=redefined-outer-name,unused-argument
-	platform.cleanup()
+	triggers.disable()
+	triggers.cleanup()
+	capture.cleanup()
 	pHandler.cleanup()
+	platform.cleanup()
 	shutil.rmtree(tmp_path)
 
 	if event_commands['shutdown']:
@@ -526,25 +556,24 @@ def cleanup(signal, frame):   # pylint: disable=redefined-outer-name,unused-argu
 
 if __name__ == "__main__":
 
-	for sig in (signal.SIGABRT, signal.SIGILL, signal.SIGINT, signal.SIGSEGV, signal.SIGTERM):
-		signal.signal(sig, cleanup)
-
 	if event_commands['startup']:
 		subprocess.Popen(event_commands['startup'], shell=True, stdout=subprocess.PIPE)
 
 	try:
 		capture = alexapi.capture.Capture(config, tmp_path)
+		capture.setup(platform.indicate_recording)
+
+		triggers.init(config, trigger_callback, capture)
+		triggers.setup()
 	except ConfigurationException as exp:
 		logger.critical(exp)
 		sys.exit(1)
 
-	capture.setup(platform.indicate_recording)
-
-	triggers.init(config, trigger_callback)
-	triggers.setup()
-
 	pHandler.setup()
 	platform.setup()
+
+	for sig in (signal.SIGABRT, signal.SIGILL, signal.SIGINT, signal.SIGSEGV, signal.SIGTERM):
+		signal.signal(sig, cleanup)
 
 	logger.info("Checking Internet Connection ...")
 	while not internet_on():
